@@ -4,8 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>WSF Assistant - All Washington State Ferry Routes</title>
+    <span id="liveStatus" class="live-badge" aria-live="polite"></span>
     <meta name="description" content="Real-time schedules for all 21 Washington State Ferry routes. No PDFs, no confusion, just instant ferry information.">
     <style>
+        .live-badge{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 10px; border-radius:9999px;
+  background:#eafaf0; border:1px solid #b7e7c1; color:#0a6e2a;
+  font-weight:600; font-size:.85rem;
+}
+.live-badge::before{
+  content:""; width:8px; height:8px; border-radius:50%; background:#22c55e;
+}
+
         * {
             margin: 0;
             padding: 0;
