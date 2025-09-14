@@ -1126,10 +1126,6 @@ async function maybeAppendLiveAfterStatic(userText) {
       `• ${fmtPT(s.dep)}${s.vessel ? " — " + s.vessel : ""}`
     ).join("<br>");
 
-    // Status pill (if present)
-    const pill = document.getElementById("liveStatus");
-    if (pill) pill.textContent = "🟢 Live: WSF (updated just now)";
-
     // Use your existing addMessage() to append a bot message
     if (typeof addMessage === "function") {
       addMessage({
