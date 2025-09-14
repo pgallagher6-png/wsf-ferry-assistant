@@ -321,6 +321,7 @@
     </style>
 </head>
 <body>
+    <div id="liveStatus" class="subtitle" style="margin-top:6px;opacity:0.9;"></div>
     <div class="container">
         <div class="header">
             <h1><span class="ferry-icon">⛴️</span> WSF Assistant</h1>
@@ -1081,5 +1082,93 @@
             messageInput.focus();
         });
     </script>
+<script>
+/* === Live data helpers === */
+async function fetchLiveSailings(routeKey) {
+  const WORKER = "https://wsf-proxy.pgallagher6.workers.dev"; // <-- your Worker URL
+  try {
+    const r = await fetch(`${WORKER}/?route=${encodeURIComponent(routeKey)}`, { cache: "no-store" });
+    if (!r.ok) throw new Error("bad status");
+    const json = await r.json();
+    if (json.ok && Array.isArray(json.sailings) && json.sailings.length) return json;
+    return null;
+  } catch { return null; }
+}
+function fmtPT(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles"
+  });
+}
+
+/* Append a live message AFTER your existing static response.
+   Uses your existing findRoute(message) to detect the route key. */
+async function maybeAppendLiveAfterStatic(userText) {
+  try {
+    // Your app already has this; we’re reusing it
+    const routeInfo = (typeof findRoute === "function") ? findRoute(userText) : null;
+    if (!routeInfo || !routeInfo.key || !routeInfo.route) return;
+
+    const live = await fetchLiveSailings(routeInfo.key);
+    if (!live) return;
+
+    // Build a small live card
+    const items = live.sailings.slice(0, 6).map(s =>
+      `• ${fmtPT(s.dep)}${s.vessel ? " — " + s.vessel : ""}`
+    ).join("<br>");
+
+    // Status pill (if present)
+    const pill = document.getElementById("liveStatus");
+    if (pill) pill.textContent = "🟢 Live: WSF (updated just now)";
+
+    // Use your existing addMessage() to append a bot message
+    if (typeof addMessage === "function") {
+      addMessage({
+        html: `<strong>${routeInfo.route.name}</strong><br><br>
+          <div class="success-box">Live data: WSF</div>
+          <div class="data-table">
+            <div class="data-row">
+              <span class="data-label">Crossing Time:</span>
+              <span class="data-value">${routeInfo.route.duration}${typeof routeInfo.route.duration === "number" ? " minutes" : ""}</span>
+            </div>
+            <div class="data-row">
+              <span class="data-label">Reservations:</span>
+              <span class="data-value">${routeInfo.route.reservations ? "⚠️ Required" : "✅ Not needed"}</span>
+            </div>
+          </div>
+          <br><strong>Next sailings (live):</strong><br>${items}
+          <br><br><em>If live data drops, I’ll fall back to the built-in schedule.</em>`
+      }, false, true);
+    }
+  } catch (e) {
+    // Silent fail—no UX break if live is flaky
+  }
+}
+
+/* Patch your send functions to call the live append right after sending */
+(function hookSenders(){
+  // wrap sendMessage
+  if (typeof sendMessage === "function" && !sendMessage.__livePatched) {
+    const orig = sendMessage;
+    window.sendMessage = function(message) {
+      const res = orig.apply(this, arguments);
+      try { maybeAppendLiveAfterStatic(message); } catch(e) {}
+      return res;
+    };
+    sendMessage.__livePatched = true;
+  }
+  // wrap sendQuickMessage (if present)
+  if (typeof sendQuickMessage === "function" && !sendQuickMessage.__livePatched) {
+    const orig2 = sendQuickMessage;
+    window.sendQuickMessage = function(message) {
+      const res = orig2.apply(this, arguments);
+      try { maybeAppendLiveAfterStatic(message); } catch(e) {}
+      return res;
+    };
+    sendQuickMessage.__livePatched = true;
+  }
+})();
+</script>
+
 </body>
 </html>
