@@ -1174,6 +1174,83 @@ async function maybeAppendLiveAfterStatic(userText) {
   }
 })();
 </script>
+<script>
+async function fetchLiveSailings(routeKey, fromName) {
+  const WORKER = "https://wsf-proxy.pgallagher6.workers.dev";
+  const url = new URL(WORKER);
+  url.searchParams.set("route", routeKey);
+  if (fromName) url.searchParams.set("from", fromName);
+  try {
+    const r = await fetch(url.toString(), { cache: "no-store" });
+    if (!r.ok) throw new Error("bad status");
+    const json = await r.json();
+    if (json.ok && Array.isArray(json.sailings) && json.sailings.length) return json;
+    return null;
+  } catch { return null; }
+}
+function fmtPT(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles"
+  });
+}
+
+/* Append live Bainbridge card AFTER your existing static reply */
+async function appendBainbridgeLive(fromName) {
+  const live = await fetchLiveSailings("seattle-bainbridge", fromName);
+  if (!live) return;
+  const items = live.sailings.slice(0, 8).map(s =>
+    `• ${fmtPT(s.dep)}${s.vessel ? " — " + s.vessel : ""}`
+  ).join("<br>");
+  if (typeof addMessage === "function") {
+    const dir = fromName === "Bainbridge Island" ? "Bainbridge → Seattle" : "Seattle → Bainbridge";
+    addMessage({
+      html: `<strong>${dir} (Live)</strong><br><br>
+        <div class="success-box">Live data: WSF</div>
+        <br><strong>Next sailings:</strong><br>${items}
+        <br><br><em>If live data drops, I’ll fall back to the built-in schedule.</em>`
+    }, false, true);
+  }
+}
+
+/* Hook your send buttons so Bainbridge messages get a live card too */
+(function hookSenders(){
+  function detectBainbridgeDir(text){
+    const t = (text||"").toLowerCase();
+    if (t.includes("bainbridge") && t.includes("seattle") && /bainbridge.*to.*seattle/.test(t)) return "Bainbridge Island";
+    return "Seattle"; // default Seattle → Bainbridge
+  }
+  if (typeof sendMessage === "function" && !sendMessage.__livePatched) {
+    const orig = sendMessage;
+    window.sendMessage = function(message) {
+      const res = orig.apply(this, arguments);
+      try {
+        const m = (message||"").toLowerCase();
+        if (m.includes("bainbridge") || m.includes("seattle")) {
+          // only for this route
+          appendBainbridgeLive(detectBainbridgeDir(message));
+        }
+      } catch(e){}
+      return res;
+    };
+    sendMessage.__livePatched = true;
+  }
+  if (typeof sendQuickMessage === "function" && !sendQuickMessage.__livePatched) {
+    const orig2 = sendQuickMessage;
+    window.sendQuickMessage = function(message) {
+      const res = orig2.apply(this, arguments);
+      try {
+        const m = (message||"").toLowerCase();
+        if (m.includes("bainbridge") || m.includes("seattle")) {
+          appendBainbridgeLive(/bainbridge.*to.*seattle/i.test(message) ? "Bainbridge Island" : "Seattle");
+        }
+      } catch(e){}
+      return res;
+    };
+    sendQuickMessage.__livePatched = true;
+  }
+})();
+</script>
 
 </body>
 </html>
